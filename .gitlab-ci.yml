@@ -1,0 +1,46 @@
+stages:
+  - check
+  - sonar
+
+gcc:
+  image: gcc
+  stage: check
+  variables:
+    CFLAGS: -Wunused-variable
+  script: 
+    - gcc -fsyntax-only -Wunused-variable main.c 2> >(tee gcc_report.log 2>&1)
+  artifacts:
+    paths:
+      - gcc_report.log
+
+clang:
+  image: gcc
+  stage: check
+  variables:
+    CFLAGS: -Wunused-variable
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends clang bear clang-tidy
+  script:
+    - bear make -B main
+    - clang-tidy main.c | tee clangtidy_report.log
+  artifacts:
+    paths:
+      - clangtidy_report.log
+
+checksource:
+  image: ciricihq/gitlab-sonar-scanner
+  stage: sonar
+  script:
+    - sonar-scanner -X -Dsonar.verbose=true 
+                    -Dsonar.host.url=$SONAR_URL -Dsonar.login=$SONAR_TOKEN 
+                    -Dsonar.projectKey=$CI_PROJECT_NAME -Dsonar.projectName=$CI_PROJECT_NAME 
+                    -Dsonar.projectVersion=v1.0.0
+                    -Dsonar.branch.name=master
+  dependencies:
+    - gcc
+    - clang
+  only:
+    variables:
+      - $SONAR_URL
+      - $SONAR_TOKEN
